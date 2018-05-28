@@ -1,0 +1,1 @@
+Cordova plugin for geolocation service - fetch coordinate

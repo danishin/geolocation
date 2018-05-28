@@ -1,0 +1,44 @@
+<?xml version='1.0' encoding='utf-8'?>
+<plugin id="com.danishin.geolocation" version="0.0.1" xmlns="http://apache.org/cordova/ns/plugins/1.0" xmlns:android="http://schemas.android.com/apk/res/android">
+  <name>Geolocation</name>
+  <description>Cordova plugin for geolocation service - fetch coordinate</description>
+  <license>Apache 2.0</license>
+  <author>Daniel Shin</author>
+  
+  <engines>
+    <engine name="cordova" version=">=3.0.0" />
+  </engines>
+  
+  <js-module src="www/geolocation.js" name="geolocation">
+    <merges target="cordova.plugins.geolocation" />
+  </js-module>
+  
+  <platform name="android">
+    <config-file parent="/*" target="res/xml/config.xml">
+      <feature name="Geolocation">
+        <param name="android-package" value="com.danishin.geolocation.Geolocation" />
+      </feature>
+    </config-file>
+    
+    <config-file parent="/*" target="AndroidManifest.xml">
+      <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+      <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+      <uses-feature android:name="android.hardware.location.gps" />
+    </config-file>
+    
+    <source-file src="src/android/Geolocation.java" target-dir="src/com/danishin/geolocation/" />
+  </platform>
+  
+  <platform name="ios">
+    <config-file target="config.xml" parent="/*">
+      <feature name="Geolocation">
+        <param name="ios-package" value="CDVLocation"/>
+      </feature>
+    </config-file>
+    
+    <header-file src="src/ios/CDVLocation.h" />
+    <source-file src="src/ios/CDVLocation.m" />
+    
+    <framework src="CoreLocation.framework" />
+  </platform>
+</plugin>
