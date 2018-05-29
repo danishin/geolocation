@@ -6,6 +6,7 @@ import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationManager;
 import android.os.Build;
+import android.os.Looper;
 import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
@@ -23,6 +24,7 @@ import org.json.JSONObject;
 
 public class Geolocation extends CordovaPlugin {
   private static int LOCATION_INTERVAL = 1000;
+  private static int LOCATION_FASTEST_INTERVAL = 100;
   private static int LOCATION_PRIORITY = LocationRequest.PRIORITY_HIGH_ACCURACY;
   
   /* Success Response */
@@ -48,6 +50,8 @@ public class Geolocation extends CordovaPlugin {
   
   private CordovaInterface cdv;
   
+  private LocationCallback locationCallback;
+  
   private void debug(String msg) { Log.d("Geolocation", msg); }
   
   @Override
@@ -60,9 +64,17 @@ public class Geolocation extends CordovaPlugin {
   }
   
   @Override
-  public boolean execute(String action, JSONArray args, CallbackContext callbackContext) {
+  public boolean execute(String action, JSONArray args, final CallbackContext callbackContext) {
     if (action.equals("getLocation")) {
-      this.getLocation(callbackContext);
+      debug("getLocation");
+      
+      cdv.getThreadPool().submit(new Runnable() {
+        @Override
+        public void run() {
+          getLocation(callbackContext);
+        }
+      });
+      
       return true;
     }
     
@@ -81,19 +93,36 @@ public class Geolocation extends CordovaPlugin {
       final LocationRequest locationRequest = new LocationRequest();
       
       locationRequest.setInterval(LOCATION_INTERVAL);
+      locationRequest.setFastestInterval(LOCATION_FASTEST_INTERVAL);
       locationRequest.setPriority(LOCATION_PRIORITY);
       
       final FusedLocationProviderClient client = LocationServices.getFusedLocationProviderClient(cdv.getActivity());
       
-      final LocationCallback locationCallback = new LocationCallback() {
+      locationCallback = new LocationCallback() {
+        @Override
+        public void onLocationAvailability(LocationAvailability locationAvailability) {
+          super.onLocationAvailability(locationAvailability);
+          
+          debug("onLocationAvailability: " + locationAvailability);
+        }
+        
         @Override
         public void onLocationResult(LocationResult locationResult) {
+          super.onLocationResult(locationResult);
+          
+          debug("onLocationResult: " + locationResult);
+          
           if (locationResult != null && locationResult.getLastLocation() != null) {
             try {
-              cb.success(getCoordinateJson(locationResult.getLastLocation(), cdv));
+              Location lastLocation = locationResult.getLastLocation();
+              
+              debug("Got Location: " + lastLocation);
+              
+              cb.success(getCoordinateJson(lastLocation, cdv));
             } catch (JSONException e) {
-              cb.error("Unknown Error: " + e.getMessage());
               e.printStackTrace();
+              
+              cb.error("Unknown Error: " + e.getMessage());
             }
           } else {
             debug("LocationResult is Null: " + locationResult);
@@ -101,13 +130,20 @@ public class Geolocation extends CordovaPlugin {
         }
       };
       
-      client.requestLocationUpdates(locationRequest, locationCallback, null /* Looper */)
+      debug("requestLocationUpdates");
+      
+      Looper.prepare();
+      
+      client.requestLocationUpdates(locationRequest, locationCallback, Looper.myLooper())
         .addOnSuccessListener(new OnSuccessListener<Void>() {
           @Override
           public void onSuccess(Void aVoid) {
             debug("requestLocationUpdates.onSuccess");
             
-            client.removeLocationUpdates(locationCallback);
+            // TODO: remove this
+//            client.removeLocationUpdates(locationCallback);
+
+//            debug("removeLocationUpdates");
           }
         })
         .addOnFailureListener(new OnFailureListener() {

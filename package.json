@@ -13,6 +13,5 @@
     "type": "git",
     "url": "git+https://github.com/danishin/com.danishin.geolocation.git"
   },
-  "author": "Daniel Shin",
-  "typings": "www/geolocation.d.ts"
+  "author": "Daniel Shin"
 }
