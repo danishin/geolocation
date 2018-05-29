@@ -1,6 +1,6 @@
 {
   "name": "com.danishin.geolocation",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Cordova plugin for geolocation service - fetch coordinate",
   "cordova": {
     "id": "com.danishin.geolocation",
@@ -13,5 +13,6 @@
     "type": "git",
     "url": "git+https://github.com/danishin/com.danishin.geolocation.git"
   },
-  "author": "Daniel Shin"
+  "author": "Daniel Shin",
+  "typings": "www/geolocation.d.ts"
 }

@@ -1,9 +1,9 @@
 var exec = require('cordova/exec');
 
-var geolocation = {
-  getCurrentCoordinate: function(win, fail) {
+var Geolocation = {
+  getCurrentPosition: function(win, fail) {
     exec(win, fail, "Geolocation", "getLocation", []);
   }
 };
 
-module.exports = geolocation;
+module.exports = Geolocation;
