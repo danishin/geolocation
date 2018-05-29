@@ -4,18 +4,22 @@ import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.location.Location;
-import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.util.Log;
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.location.LocationListener;
 import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationServices;
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaInterface;
 import org.apache.cordova.CordovaPlugin;
-import org.apache.cordova.CordovaWebView;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -45,15 +49,25 @@ public class Geolocation extends CordovaPlugin {
   private static final String GPS_OFF = "gps_off";
   private static final String NO_PERMISSION = "no_permission";
   
-  private CordovaInterface cdv;
+  private GoogleApiClient googleApiClient;
   
   private void debug(String msg) { Log.d("Geolocation", msg); }
   
   @Override
-  public void initialize(CordovaInterface cordova, CordovaWebView webView) {
-    super.initialize(cordova, webView);
+  protected void pluginInitialize() {
+    super.pluginInitialize();
     
-    this.cdv = cordova;
+    this.googleApiClient = new GoogleApiClient.Builder(cordova.getActivity())
+      .addOnConnectionFailedListener(new GoogleApiClient.OnConnectionFailedListener() {
+        @Override
+        public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
+          debug("onConnectionFailed: " + connectionResult);
+        }
+      })
+      .addApi(LocationServices.API)
+      .build();
+    
+    googleApiClient.connect();
     
     debug("Initialized");
   }
@@ -63,14 +77,19 @@ public class Geolocation extends CordovaPlugin {
     if (action.equals("getLocation")) {
       debug("getLocation");
       
-      // TODO:
-//      cdv.getThreadPool().submit(new Runnable() {
-//        @Override
-//        public void run() {
-//          getLocation(callbackContext);
-//        }
-//      });
-      getLocation(callbackContext);
+      googleApiClient.registerConnectionCallbacks(new GoogleApiClient.ConnectionCallbacks() {
+        @Override
+        public void onConnected(@Nullable Bundle bundle) {
+          debug("onConnected: " + bundle);
+          
+          getLocation(callbackContext);
+        }
+        
+        @Override
+        public void onConnectionSuspended(int i) {
+          debug("onConnectionSuspended: " + i);
+        }
+      });
       
       return true;
     }
@@ -79,23 +98,20 @@ public class Geolocation extends CordovaPlugin {
   }
   
   private void getLocation(final CallbackContext cb) {
-    boolean gpsIsOn = ((LocationManager) cdv.getActivity().getSystemService(Context.LOCATION_SERVICE)).isProviderEnabled(LocationManager.GPS_PROVIDER);
-    boolean hasPermission = ActivityCompat.checkSelfPermission(cdv.getActivity(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED || ActivityCompat.checkSelfPermission(cdv.getActivity(), Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    boolean gpsIsOn = ((LocationManager) cordova.getActivity().getSystemService(Context.LOCATION_SERVICE)).isProviderEnabled(LocationManager.GPS_PROVIDER);
+    boolean hasPermission = ActivityCompat.checkSelfPermission(cordova.getActivity(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED || ActivityCompat.checkSelfPermission(cordova.getActivity(), Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
     
     if (!gpsIsOn) {
       cb.error(GPS_OFF);
     } else if (!hasPermission) {
       cb.error(NO_PERMISSION);
     }  else {
-      LocationManager locationManager = (LocationManager) cordova.getActivity().getSystemService(Context.LOCATION_SERVICE);
-      assert locationManager != null;
-      
       LocationListener locationListener = new LocationListener() {
         public void onLocationChanged(Location location) {
           debug("onLocationChanged: " + location);
           
           try {
-            JSONObject json = getCoordinateJson(location, cdv);
+            JSONObject json = getCoordinateJson(location, cordova);
             
             cb.success(json);
             
@@ -105,21 +121,16 @@ public class Geolocation extends CordovaPlugin {
             cb.error("Unknown Error: " + e);
           }
         }
-        
-        public void onStatusChanged(String provider, int status, Bundle extras) {
-          debug(String.format("onStatusChanged %s, %s, %s", provider, status, extras.toString()));
-        }
-        
-        public void onProviderEnabled(String provider) {
-          debug("onProviderEnabled: " + provider);
-        }
-        
-        public void onProviderDisabled(String provider) {
-          debug("onProviderDisabled: " + provider);
-        }
       };
       
-      locationManager.requestSingleUpdate(LocationManager.GPS_PROVIDER, locationListener, null /* Looper */);
+      LocationRequest locationRequest = LocationRequest.create();
+      
+      locationRequest.setInterval(LOCATION_INTERVAL);
+      locationRequest.setFastestInterval(LOCATION_FASTEST_INTERVAL);
+      locationRequest.setPriority(LOCATION_PRIORITY);
+      locationRequest.setNumUpdates(1);
+      
+      LocationServices.FusedLocationApi.requestLocationUpdates(googleApiClient, locationRequest, locationListener);
     }
   }
 }
