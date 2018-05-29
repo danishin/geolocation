@@ -117,8 +117,8 @@ public class Geolocation extends CordovaPlugin {
             
           } catch (JSONException e) {
             e.printStackTrace();
-            debug("Unknown Error: " + e);
-            cb.error("Unknown Error: " + e);
+            debug("Unknown Error: " + e.getMessage());
+            cb.error("Unknown Error: " + e.getMessage());
           }
         }
       };
