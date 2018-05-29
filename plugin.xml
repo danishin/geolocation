@@ -27,6 +27,8 @@
     </config-file>
     
     <source-file src="src/android/Geolocation.java" target-dir="src/com/danishin/geolocation/" />
+    
+    <framework src="com.google.android.gms:play-services-location:+" />
   </platform>
   
   <platform name="ios">
