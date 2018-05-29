@@ -4,16 +4,14 @@ import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.location.Location;
+import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Build;
-import android.os.Looper;
+import android.os.Bundle;
 import android.provider.Settings;
-import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.util.Log;
-import com.google.android.gms.location.*;
-import com.google.android.gms.tasks.OnFailureListener;
-import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.location.LocationRequest;
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaInterface;
 import org.apache.cordova.CordovaPlugin;
@@ -46,11 +44,8 @@ public class Geolocation extends CordovaPlugin {
   /* Error Responses */
   private static final String GPS_OFF = "gps_off";
   private static final String NO_PERMISSION = "no_permission";
-  private static final String NO_LOCATION = "no_location";
   
   private CordovaInterface cdv;
-  
-  private LocationCallback locationCallback;
   
   private void debug(String msg) { Log.d("Geolocation", msg); }
   
@@ -68,12 +63,14 @@ public class Geolocation extends CordovaPlugin {
     if (action.equals("getLocation")) {
       debug("getLocation");
       
-      cdv.getThreadPool().submit(new Runnable() {
-        @Override
-        public void run() {
-          getLocation(callbackContext);
-        }
-      });
+      // TODO:
+//      cdv.getThreadPool().submit(new Runnable() {
+//        @Override
+//        public void run() {
+//          getLocation(callbackContext);
+//        }
+//      });
+      getLocation(callbackContext);
       
       return true;
     }
@@ -90,70 +87,39 @@ public class Geolocation extends CordovaPlugin {
     } else if (!hasPermission) {
       cb.error(NO_PERMISSION);
     }  else {
-      final LocationRequest locationRequest = new LocationRequest();
+      LocationManager locationManager = (LocationManager) cordova.getActivity().getSystemService(Context.LOCATION_SERVICE);
+      assert locationManager != null;
       
-      locationRequest.setInterval(LOCATION_INTERVAL);
-      locationRequest.setFastestInterval(LOCATION_FASTEST_INTERVAL);
-      locationRequest.setPriority(LOCATION_PRIORITY);
-      
-      final FusedLocationProviderClient client = LocationServices.getFusedLocationProviderClient(cdv.getActivity());
-      
-      locationCallback = new LocationCallback() {
-        @Override
-        public void onLocationAvailability(LocationAvailability locationAvailability) {
-          super.onLocationAvailability(locationAvailability);
+      LocationListener locationListener = new LocationListener() {
+        public void onLocationChanged(Location location) {
+          debug("onLocationChanged: " + location);
           
-          debug("onLocationAvailability: " + locationAvailability);
+          try {
+            JSONObject json = getCoordinateJson(location, cdv);
+            
+            cb.success(json);
+            
+          } catch (JSONException e) {
+            e.printStackTrace();
+            debug("Unknown Error: " + e);
+            cb.error("Unknown Error: " + e);
+          }
         }
         
-        @Override
-        public void onLocationResult(LocationResult locationResult) {
-          super.onLocationResult(locationResult);
-          
-          debug("onLocationResult: " + locationResult);
-          
-          if (locationResult != null && locationResult.getLastLocation() != null) {
-            try {
-              Location lastLocation = locationResult.getLastLocation();
-              
-              debug("Got Location: " + lastLocation);
-              
-              cb.success(getCoordinateJson(lastLocation, cdv));
-            } catch (JSONException e) {
-              e.printStackTrace();
-              
-              cb.error("Unknown Error: " + e.getMessage());
-            }
-          } else {
-            debug("LocationResult is Null: " + locationResult);
-          }
+        public void onStatusChanged(String provider, int status, Bundle extras) {
+          debug(String.format("onStatusChanged %s, %s, %s", provider, status, extras.toString()));
+        }
+        
+        public void onProviderEnabled(String provider) {
+          debug("onProviderEnabled: " + provider);
+        }
+        
+        public void onProviderDisabled(String provider) {
+          debug("onProviderDisabled: " + provider);
         }
       };
       
-      debug("requestLocationUpdates");
-      
-      Looper.prepare();
-      
-      client.requestLocationUpdates(locationRequest, locationCallback, Looper.myLooper())
-        .addOnSuccessListener(new OnSuccessListener<Void>() {
-          @Override
-          public void onSuccess(Void aVoid) {
-            debug("requestLocationUpdates.onSuccess");
-            
-            // TODO: remove this
-//            client.removeLocationUpdates(locationCallback);
-
-//            debug("removeLocationUpdates");
-          }
-        })
-        .addOnFailureListener(new OnFailureListener() {
-          @Override
-          public void onFailure(@NonNull Exception e) {
-            e.printStackTrace();
-            debug("requestLocationUpdates.onFailure: " + e);
-            cb.error("Unknown Error: " + e.getMessage());
-          }
-        });
+      locationManager.requestSingleUpdate(LocationManager.GPS_PROVIDER, locationListener, null /* Looper */);
     }
   }
 }
