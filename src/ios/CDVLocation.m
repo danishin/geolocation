@@ -139,15 +139,12 @@
     __locationStarted = YES;
     if (enableHighAccuracy) {
         __highAccuracyEnabled = YES;
-        // Set distance filter to 5 for a high accuracy. Setting it to "kCLDistanceFilterNone" could provide a
-        // higher accuracy, but it's also just spamming the callback with useless reports which drain the battery.
-        self.locationManager.distanceFilter = 5;
-        // Set desired accuracy to Best.
-        self.locationManager.desiredAccuracy = kCLLocationAccuracyBest;
+        self.locationManager.distanceFilter = kCLDistanceFilterNone;
+        self.locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation;
     } else {
         __highAccuracyEnabled = NO;
         self.locationManager.distanceFilter = 10;
-        self.locationManager.desiredAccuracy = kCLLocationAccuracyThreeKilometers;
+        self.locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters;
     }
 }
 
@@ -180,7 +177,7 @@
     }
     if (self.locationData.watchCallbacks.count > 0) {
         for (NSString* timerId in self.locationData.watchCallbacks) {
-            [self returnLocationInfo:[self.locationData.watchCallbacks objectForKey:timerId] andKeepCallback:YES];
+            [self returnLocationInfo:self.locationData.watchCallbacks[timerId] andKeepCallback:YES];
         }
     } else {
         // No callbacks waiting on us anymore, turn off listening.
@@ -194,10 +191,13 @@
         NSString* callbackId = command.callbackId;
         BOOL enableHighAccuracy = [[command argumentAtIndex:0] boolValue];
 
-        if ([self isLocationServicesEnabled] == NO) {
-            NSMutableDictionary* posError = [NSMutableDictionary dictionaryWithCapacity:2];
-            [posError setObject:[NSNumber numberWithInt:PERMISSIONDENIED] forKey:@"code"];
-            [posError setObject:@"Location services are disabled." forKey:@"message"];
+        if (![self isLocationServicesEnabled]) {
+            NSDictionary *posError = @{
+                    @"code": @(PERMISSIONDENIED),
+                    @"message": @"Location services are disabled."
+
+            };
+
             CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsDictionary:posError];
             [self.commandDelegate sendPluginResult:result callbackId:callbackId];
         } else {
@@ -205,6 +205,7 @@
                 self.locationData = [[CDVLocationData alloc] init];
             }
             CDVLocationData* lData = self.locationData;
+
             if (!lData.locationCallbacks) {
                 lData.locationCallbacks = [NSMutableArray arrayWithCapacity:1];
             }
@@ -239,12 +240,12 @@
     }
 
     // add the callbackId into the dictionary so we can call back whenever get data
-    [lData.watchCallbacks setObject:callbackId forKey:timerId];
+    lData.watchCallbacks[timerId] = callbackId;
 
-    if ([self isLocationServicesEnabled] == NO) {
+    if (![self isLocationServicesEnabled]) {
         NSMutableDictionary* posError = [NSMutableDictionary dictionaryWithCapacity:2];
-        [posError setObject:[NSNumber numberWithInt:PERMISSIONDENIED] forKey:@"code"];
-        [posError setObject:@"Location services are disabled." forKey:@"message"];
+        posError[@"code"] = @(PERMISSIONDENIED);
+        posError[@"message"] = @"Location services are disabled.";
         CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsDictionary:posError];
         [self.commandDelegate sendPluginResult:result callbackId:callbackId];
     } else {
@@ -259,7 +260,7 @@
 {
     NSString* timerId = [command argumentAtIndex:0];
 
-    if (self.locationData && self.locationData.watchCallbacks && [self.locationData.watchCallbacks objectForKey:timerId]) {
+    if (self.locationData && self.locationData.watchCallbacks && self.locationData.watchCallbacks[timerId]) {
         [self.locationData.watchCallbacks removeObjectForKey:timerId];
         if([self.locationData.watchCallbacks count] == 0) {
             [self _stopLocation];
@@ -283,15 +284,16 @@
     } else if (lData && lData.locationInfo) {
         CLLocation* lInfo = lData.locationInfo;
         NSMutableDictionary* returnInfo = [NSMutableDictionary dictionaryWithCapacity:8];
-        NSNumber* timestamp = [NSNumber numberWithDouble:([lInfo.timestamp timeIntervalSince1970] * 1000)];
-        [returnInfo setObject:timestamp forKey:@"timestamp"];
-        [returnInfo setObject:[NSNumber numberWithDouble:lInfo.speed] forKey:@"velocity"];
-        [returnInfo setObject:[NSNumber numberWithDouble:lInfo.verticalAccuracy] forKey:@"altitudeAccuracy"];
-        [returnInfo setObject:[NSNumber numberWithDouble:lInfo.horizontalAccuracy] forKey:@"accuracy"];
-        [returnInfo setObject:[NSNumber numberWithDouble:lInfo.course] forKey:@"heading"];
-        [returnInfo setObject:[NSNumber numberWithDouble:lInfo.altitude] forKey:@"altitude"];
-        [returnInfo setObject:[NSNumber numberWithDouble:lInfo.coordinate.latitude] forKey:@"latitude"];
-        [returnInfo setObject:[NSNumber numberWithDouble:lInfo.coordinate.longitude] forKey:@"longitude"];
+        NSNumber* timestamp = @([lInfo.timestamp timeIntervalSince1970] * 1000);
+
+        returnInfo[@"timestamp"] = timestamp;
+        returnInfo[@"velocity"] = @(lInfo.speed);
+        returnInfo[@"altitudeAccuracy"] = @(lInfo.verticalAccuracy);
+        returnInfo[@"accuracy"] = @(lInfo.horizontalAccuracy);
+        returnInfo[@"heading"] = @(lInfo.course);
+        returnInfo[@"altitude"] = @(lInfo.altitude);
+        returnInfo[@"latitude"] = @(lInfo.coordinate.latitude);
+        returnInfo[@"longitude"] = @(lInfo.coordinate.longitude);
 
         result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:returnInfo];
         [result setKeepCallbackAsBool:keepCallback];
@@ -305,8 +307,8 @@
 {
     NSMutableDictionary* posError = [NSMutableDictionary dictionaryWithCapacity:2];
 
-    [posError setObject:[NSNumber numberWithUnsignedInteger:errorCode] forKey:@"code"];
-    [posError setObject:message ? message:@"" forKey:@"message"];
+    posError[@"code"] = @(errorCode);
+    posError[@"message"] = message ? message : @"";
     CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsDictionary:posError];
 
     for (NSString* callbackId in self.locationData.locationCallbacks) {
