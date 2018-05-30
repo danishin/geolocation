@@ -46,7 +46,9 @@ public class Geolocation extends CordovaPlugin {
   
   /* Error Responses */
   private static final String GPS_OFF = "gps_off";
-  private static final String NO_PERMISSION = "no_permission";
+  private static final String PERMISSION_DENIED = "permission_denied";
+  private static final String POSITION_UNAVAILABLE = "position_unavailable";
+  private static final String TIMEOUT = "timeout";
   
   private GoogleApiClient googleApiClient;
   
@@ -72,11 +74,11 @@ public class Geolocation extends CordovaPlugin {
   }
   
   @Override
-  public boolean execute(String action, JSONArray args, final CallbackContext callbackContext) throws JSONException {
+  public boolean execute(String action, JSONArray args, final CallbackContext callbackContext) {
     if (action.equals("getLocation")) {
       debug("getLocation: " + args);
       
-      final boolean enableHighAccuracy = args.getBoolean(0);
+      final boolean enableHighAccuracy = args.optBoolean(0, false); // default to low accuracy if not given
       
       googleApiClient.registerConnectionCallbacks(new GoogleApiClient.ConnectionCallbacks() {
         @Override
@@ -105,7 +107,7 @@ public class Geolocation extends CordovaPlugin {
     if (!gpsIsOn) {
       cb.error(GPS_OFF);
     } else if (!hasPermission) {
-      cb.error(NO_PERMISSION);
+      cb.error(PERMISSION_DENIED);
     }  else {
       LocationListener locationListener = new LocationListener() {
         public void onLocationChanged(Location location) {
@@ -119,7 +121,7 @@ public class Geolocation extends CordovaPlugin {
           } catch (JSONException e) {
             e.printStackTrace();
             debug("Unknown Error: " + e.getMessage());
-            cb.error("Unknown Error: " + e.getMessage());
+            cb.error(POSITION_UNAVAILABLE);
           }
         }
       };
