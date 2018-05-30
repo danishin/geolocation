@@ -9,11 +9,11 @@
     <engine name="cordova" version=">=3.0.0" />
   </engines>
   
-  <js-module src="www/geolocation.js" name="geolocation">
-    <merges target="cordova.plugins.geolocation" />
-  </js-module>
-  
   <platform name="android">
+    <js-module src="www/android/geolocation.js" name="geolocation">
+      <merges target="cordova.plugins.geolocation" />
+    </js-module>
+    
     <config-file parent="/*" target="res/xml/config.xml">
       <feature name="Geolocation">
         <param name="android-package" value="com.danishin.geolocation.Geolocation" />
@@ -32,6 +32,10 @@
   </platform>
   
   <platform name="ios">
+    <js-module src="www/ios/geolocation.js" name="geolocation">
+      <merges target="cordova.plugins.geolocation" />
+    </js-module>
+    
     <config-file target="config.xml" parent="/*">
       <feature name="Geolocation">
         <param name="ios-package" value="CDVLocation"/>

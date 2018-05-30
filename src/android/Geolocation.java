@@ -27,7 +27,6 @@ import org.json.JSONObject;
 public class Geolocation extends CordovaPlugin {
   private static int LOCATION_INTERVAL = 1000;
   private static int LOCATION_FASTEST_INTERVAL = 100;
-  private static int LOCATION_PRIORITY = LocationRequest.PRIORITY_HIGH_ACCURACY;
   
   /* Success Response */
   private static JSONObject getCoordinateJson(Location location, CordovaInterface cordova) throws JSONException {
@@ -73,16 +72,18 @@ public class Geolocation extends CordovaPlugin {
   }
   
   @Override
-  public boolean execute(String action, JSONArray args, final CallbackContext callbackContext) {
+  public boolean execute(String action, JSONArray args, final CallbackContext callbackContext) throws JSONException {
     if (action.equals("getLocation")) {
-      debug("getLocation");
+      debug("getLocation: " + args);
+      
+      final boolean enableHighAccuracy = args.getBoolean(0);
       
       googleApiClient.registerConnectionCallbacks(new GoogleApiClient.ConnectionCallbacks() {
         @Override
         public void onConnected(@Nullable Bundle bundle) {
           debug("onConnected: " + bundle);
           
-          getLocation(callbackContext);
+          getLocation(callbackContext, enableHighAccuracy);
         }
         
         @Override
@@ -97,7 +98,7 @@ public class Geolocation extends CordovaPlugin {
     return false;
   }
   
-  private void getLocation(final CallbackContext cb) {
+  private void getLocation(final CallbackContext cb, boolean enableHighAccuracy) {
     boolean gpsIsOn = ((LocationManager) cordova.getActivity().getSystemService(Context.LOCATION_SERVICE)).isProviderEnabled(LocationManager.GPS_PROVIDER);
     boolean hasPermission = ActivityCompat.checkSelfPermission(cordova.getActivity(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED || ActivityCompat.checkSelfPermission(cordova.getActivity(), Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
     
@@ -127,7 +128,7 @@ public class Geolocation extends CordovaPlugin {
       
       locationRequest.setInterval(LOCATION_INTERVAL);
       locationRequest.setFastestInterval(LOCATION_FASTEST_INTERVAL);
-      locationRequest.setPriority(LOCATION_PRIORITY);
+      locationRequest.setPriority(enableHighAccuracy ? LocationRequest.PRIORITY_HIGH_ACCURACY : LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);
       locationRequest.setNumUpdates(1);
       
       LocationServices.FusedLocationApi.requestLocationUpdates(googleApiClient, locationRequest, locationListener);
