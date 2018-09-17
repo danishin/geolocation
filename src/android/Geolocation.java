@@ -14,9 +14,8 @@ import android.support.v4.app.ActivityCompat;
 import android.util.Log;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
-import com.google.android.gms.location.LocationListener;
-import com.google.android.gms.location.LocationRequest;
-import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.*;
+import com.google.android.gms.tasks.OnSuccessListener;
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaInterface;
 import org.apache.cordova.CordovaPlugin;
@@ -25,8 +24,8 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 public class Geolocation extends CordovaPlugin {
-  private static int LOCATION_INTERVAL = 1000;
-  private static int LOCATION_FASTEST_INTERVAL = 100;
+  private static int LOCATION_INTERVAL = 5000;
+  private static int LOCATION_FASTEST_INTERVAL = 1000;
   
   /* Success Response */
   private static JSONObject getCoordinateJson(Location location, CordovaInterface cordova) throws JSONException {
@@ -35,6 +34,7 @@ public class Geolocation extends CordovaPlugin {
     json.put("latitude", location.getLatitude());
     json.put("longitude", location.getLongitude());
     json.put("accuracy", location.getAccuracy());
+    json.put("timestamp", location.getTime());
     
     boolean isMocked = Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2
       ? location.isFromMockProvider()
@@ -48,7 +48,6 @@ public class Geolocation extends CordovaPlugin {
   private static final String GPS_OFF = "gps_off";
   private static final String PERMISSION_DENIED = "permission_denied";
   private static final String POSITION_UNAVAILABLE = "position_unavailable";
-  private static final String TIMEOUT = "timeout";
   
   private GoogleApiClient googleApiClient;
   
@@ -75,17 +74,13 @@ public class Geolocation extends CordovaPlugin {
   
   @Override
   public boolean execute(String action, JSONArray args, final CallbackContext callbackContext) {
-    if (action.equals("getLocation")) {
-      debug("getLocation: " + args);
-      
-      final boolean enableHighAccuracy = args.optBoolean(0, false); // default to low accuracy if not given
-      
+    if (action.equals("observeLocation")) {
       googleApiClient.registerConnectionCallbacks(new GoogleApiClient.ConnectionCallbacks() {
         @Override
         public void onConnected(@Nullable Bundle bundle) {
           debug("onConnected: " + bundle);
           
-          getLocation(callbackContext, enableHighAccuracy);
+          observeLocation(callbackContext);
         }
         
         @Override
@@ -100,40 +95,70 @@ public class Geolocation extends CordovaPlugin {
     return false;
   }
   
-  private void getLocation(final CallbackContext cb, boolean enableHighAccuracy) {
-    boolean gpsIsOn = ((LocationManager) cordova.getActivity().getSystemService(Context.LOCATION_SERVICE)).isProviderEnabled(LocationManager.GPS_PROVIDER);
+  private void observeLocation(final CallbackContext cb) {
+    LocationManager locationManager = (LocationManager) cordova.getActivity().getSystemService(Context.LOCATION_SERVICE);
+    
+    boolean gpsOrNetworkProviderIsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) || locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
     boolean hasPermission = ActivityCompat.checkSelfPermission(cordova.getActivity(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED || ActivityCompat.checkSelfPermission(cordova.getActivity(), Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
     
-    if (!gpsIsOn) {
+    if (!gpsOrNetworkProviderIsEnabled) {
       cb.error(GPS_OFF);
     } else if (!hasPermission) {
       cb.error(PERMISSION_DENIED);
     }  else {
-      LocationListener locationListener = new LocationListener() {
-        public void onLocationChanged(Location location) {
-          debug("onLocationChanged: " + location);
-          
-          try {
-            JSONObject json = getCoordinateJson(location, cordova);
+      FusedLocationProviderClient fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(cordova.getActivity().getApplicationContext());
+      
+      /* Get Last Location */
+      fusedLocationProviderClient.getLastLocation()
+        .addOnSuccessListener(new OnSuccessListener<Location>() {
+          @Override
+          public void onSuccess(Location location) {
+            debug("getLastLocation::Location:" + location);
             
-            cb.success(json);
-            
-          } catch (JSONException e) {
-            e.printStackTrace();
-            debug("Unknown Error: " + e.getMessage());
-            cb.error(POSITION_UNAVAILABLE);
+            if (location != null) {
+              try {
+                JSONObject json = getCoordinateJson(location, cordova);
+                
+                cb.success(json);
+                
+              } catch (JSONException e) {
+                e.printStackTrace();
+                debug("Unknown Error: " + e.getMessage());
+                cb.error(POSITION_UNAVAILABLE);
+              }
+            }
           }
-        }
-      };
+        });
       
       LocationRequest locationRequest = LocationRequest.create();
       
       locationRequest.setInterval(LOCATION_INTERVAL);
       locationRequest.setFastestInterval(LOCATION_FASTEST_INTERVAL);
-      locationRequest.setPriority(enableHighAccuracy ? LocationRequest.PRIORITY_HIGH_ACCURACY : LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);
-      locationRequest.setNumUpdates(1);
+      locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
       
-      LocationServices.FusedLocationApi.requestLocationUpdates(googleApiClient, locationRequest, locationListener);
+      LocationCallback locationCallback = new LocationCallback() {
+        @Override
+        public void onLocationResult(LocationResult locationResult) {
+          Location lastLocation = locationResult.getLastLocation();
+          
+          debug("requestLocationUpdates::LocationResult: " + locationResult);
+          debug("requestLocationUpdates::LocationResult.getLastLocation: " + lastLocation);
+          
+          if (lastLocation != null) {
+            try {
+              JSONObject json = getCoordinateJson(lastLocation, cordova);
+              
+              cb.success(json);
+              
+            } catch (JSONException e) {
+              e.printStackTrace();
+              debug("Unknown Error: " + e.getMessage());
+            }
+          }
+        }
+      };
+      
+      fusedLocationProviderClient.requestLocationUpdates(locationRequest, locationCallback, null /* Looper */);
     }
   }
 }

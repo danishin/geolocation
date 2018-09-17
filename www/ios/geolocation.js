@@ -2,8 +2,8 @@ var exec = require('cordova/exec');
 
 var Geolocation = {
   // NOTE: we didn't change objc implementation so we just tweaked js file here instead by providing patches.
-  getCurrentPosition: function(options, successCallback, failCallback) {
-    var enableHighAccuracy = options.enableHighAccuracy !== undefined ? options.enableHighAccuracy : false; // default to low accuracy if not given
+  getCurrentPosition: function(successCallback, failCallback) {
+    var enableHighAccuracy = true;
     var maximumAge = 0;
 
     var win = function(res) {
@@ -11,6 +11,7 @@ var Geolocation = {
         latitude: res.latitude,
         longitude: res.longitude,
         accuracy: res.accuracy,
+        timestamp: res.timestamp,
         isMocked: false // location cannot be faked in ios
       };
 
