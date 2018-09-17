@@ -19,12 +19,13 @@ import com.google.android.gms.tasks.OnSuccessListener;
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaInterface;
 import org.apache.cordova.CordovaPlugin;
+import org.apache.cordova.PluginResult;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 public class Geolocation extends CordovaPlugin {
-  private static int LOCATION_INTERVAL = 5000;
+  private static int LOCATION_INTERVAL = 2000;
   private static int LOCATION_FASTEST_INTERVAL = 1000;
   
   /* Success Response */
@@ -51,7 +52,23 @@ public class Geolocation extends CordovaPlugin {
   
   private GoogleApiClient googleApiClient;
   
+  /* Utils */
   private void debug(String msg) { Log.d("Geolocation", msg); }
+  
+  private void sendLocation(CallbackContext callbackContext, Location location) {
+    try {
+      JSONObject json = getCoordinateJson(location, cordova);
+      
+      PluginResult pluginResult = new PluginResult(PluginResult.Status.OK, json);
+      pluginResult.setKeepCallback(true);
+      
+      callbackContext.sendPluginResult(pluginResult);
+      
+    } catch (JSONException e) {
+      e.printStackTrace();
+      debug("Unknown Error: " + e.getMessage());
+    }
+  }
   
   @Override
   protected void pluginInitialize() {
@@ -106,9 +123,9 @@ public class Geolocation extends CordovaPlugin {
     } else if (!hasPermission) {
       cb.error(PERMISSION_DENIED);
     }  else {
-      FusedLocationProviderClient fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(cordova.getActivity().getApplicationContext());
+      final FusedLocationProviderClient fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(cordova.getActivity().getApplicationContext());
       
-      /* Get Last Location */
+      /* Get Last Location Immediately */
       fusedLocationProviderClient.getLastLocation()
         .addOnSuccessListener(new OnSuccessListener<Location>() {
           @Override
@@ -116,27 +133,19 @@ public class Geolocation extends CordovaPlugin {
             debug("getLastLocation::Location:" + location);
             
             if (location != null) {
-              try {
-                JSONObject json = getCoordinateJson(location, cordova);
-                
-                cb.success(json);
-                
-              } catch (JSONException e) {
-                e.printStackTrace();
-                debug("Unknown Error: " + e.getMessage());
-                cb.error(POSITION_UNAVAILABLE);
-              }
+              sendLocation(cb, location);
             }
           }
         });
       
+      /* Request Location Updates */
       LocationRequest locationRequest = LocationRequest.create();
       
       locationRequest.setInterval(LOCATION_INTERVAL);
       locationRequest.setFastestInterval(LOCATION_FASTEST_INTERVAL);
       locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
       
-      LocationCallback locationCallback = new LocationCallback() {
+      final LocationCallback locationCallback = new LocationCallback() {
         @Override
         public void onLocationResult(LocationResult locationResult) {
           Location lastLocation = locationResult.getLastLocation();
@@ -145,15 +154,7 @@ public class Geolocation extends CordovaPlugin {
           debug("requestLocationUpdates::LocationResult.getLastLocation: " + lastLocation);
           
           if (lastLocation != null) {
-            try {
-              JSONObject json = getCoordinateJson(lastLocation, cordova);
-              
-              cb.success(json);
-              
-            } catch (JSONException e) {
-              e.printStackTrace();
-              debug("Unknown Error: " + e.getMessage());
-            }
+            sendLocation(cb, lastLocation);
           }
         }
       };
